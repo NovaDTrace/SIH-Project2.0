@@ -6,9 +6,10 @@ export const API = `${BASE}/api`;
 export const api = axios.create({ baseURL: API, timeout: 120_000 });
 
 export const loadPreset = () => api.post("/dataset/load-preset").then((r) => r.data);
-export const uploadCsv = (file) => {
+export const uploadCsv = (smartphoneFile, vboxFile) => {
   const fd = new FormData();
-  fd.append("file", file);
+  fd.append("smartphone", smartphoneFile);
+  if (vboxFile) fd.append("vbox", vboxFile);
   return api.post("/dataset/upload", fd, {
     headers: { "Content-Type": "multipart/form-data" },
   }).then((r) => r.data);

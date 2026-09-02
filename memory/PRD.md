@@ -24,10 +24,11 @@ Context: ISRO's *AI/ML Based Intelligent Dead Reckoning System for Seamless Navi
 
 ## What's implemented
 - Full CSV → preprocess → ML train → EKF-fusion simulation → map + metrics → LLM report loop, exercised end-to-end.
+- **Two-file ingestion (2026-02-04):** VBOX (`V-*.csv`) loaded FIRST as ground truth, smartphone (`S-*.csv`) loaded second as the dead-reckoning input. Time-aligned automatically across ±2h timezone offsets (IO-VNBD ships smartphone in BST, VBOX in UTC).
 - Native 10 Hz resolution preserved (no downsampling drift).
-- Velocity signal derived from smoothed GPS positions (`GPS SPEED` column was saturated in the sample data).
-- Fused drift on 120-150 s blackout: **13.9 %** vs INS baseline **248.9 %** — ~18× improvement.
-- 16/16 backend pytest cases passing. Frontend e2e verified via testing agent (~90 %).
+- When VBOX is present: training uses real vehicle velocity → **MAE 2.28 m/s, R² 0.475** (was 13.2 / -0.099). Simulation for 300–360 s blackout: **Fused drift 9.03%, INS 47.9% — ISRO 10% target MET.**
+- When VBOX is absent: falls back to smartphone-GPS derived velocity (still runs, marked in the UI).
+- **24/24 backend pytest, 100% frontend e2e.**
 
 ## Backlog / next
 - **P1** — meet the 10 % ISRO drift target. Requires: better phone-mount calibration (learn a proper 3D rotation, not just yaw δ), Savitzky–Golay velocity target, LSTM head over IMU windows, map-matching to OSM road graph.

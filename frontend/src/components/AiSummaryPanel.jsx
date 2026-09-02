@@ -33,7 +33,8 @@ export default function AiSummaryPanel({ session, canRun }) {
         </Button>
       </div>
 
-      <div className="rounded-md border border-slate-800 bg-slate-950/70 p-4 font-mono text-sm text-slate-300 min-h-[160px] whitespace-pre-wrap leading-relaxed">
+      <div data-testid="ai-summary-output"
+           className="rounded-md border border-slate-800 bg-slate-950/70 p-4 font-mono text-sm text-slate-300 min-h-[160px] whitespace-pre-wrap leading-relaxed">
         {text ? text : (
           <span className="text-slate-500">
             {"> await run.simulation && run.training\n> generate mission_report --model claude-sonnet-4.5\n"}

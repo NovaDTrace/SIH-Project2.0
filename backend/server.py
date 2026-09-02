@@ -20,6 +20,8 @@ from starlette.middleware.cors import CORSMiddleware
 from pipeline import (
     FEATURE_NAMES,
     load_smartphone_csv,
+    load_vbox_csv,
+    merge_smartphone_vbox,
     run_dead_reckoning,
     train_velocity_model,
 )
@@ -37,7 +39,8 @@ api = APIRouter(prefix="/api")
 
 # In-memory session store (single process, fine for MVP)
 SESSIONS: Dict[str, Dict[str, Any]] = {}
-SAMPLE_CSV = ROOT_DIR / "sample_data" / "S-S1.csv"
+SAMPLE_S_CSV = ROOT_DIR / "sample_data" / "S-S1.csv"
+SAMPLE_V_CSV = ROOT_DIR / "sample_data" / "V-S1.csv"
 
 log = logging.getLogger("dr_api")
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +56,8 @@ class SessionOut(BaseModel):
     lon0: float
     preview: list[dict]
     sensor_series: dict
+    has_vbox: bool = False
+    gt_source: str = "smartphone_gps"
 
 
 class TrainIn(BaseModel):
@@ -85,10 +90,11 @@ class AiSummaryIn(BaseModel):
 
 def _build_session(df: pd.DataFrame) -> SessionOut:
     sid = uuid.uuid4().hex[:12]
+    has_vbox = "gt_lat" in df.columns
     SESSIONS[sid] = {"df": df, "model": None, "v_pred": None, "sim": None,
+                     "has_vbox": has_vbox,
                      "created": datetime.now(timezone.utc)}
 
-    # Small preview & thinned sensor time-series (~400 pts) for charts
     step = max(1, len(df) // 400)
     ss = df.iloc[::step].reset_index(drop=True)
     sensor_series = {
@@ -102,16 +108,30 @@ def _build_session(df: pd.DataFrame) -> SessionOut:
         "speed": ss["speed_ms"].round(3).tolist(),
         "yaw": ss["yaw"].round(2).tolist(),
     }
-    preview = df.head(8)[["t", "lat", "lon", "speed_ms", "ax", "ay", "az",
-                          "wyaw", "yaw"]].round(4).to_dict(orient="records")
+    if has_vbox:
+        sensor_series["gt_v"] = ss["gt_v_ms"].round(3).tolist()
+        if "gt_wheel_fl" in ss.columns:
+            sensor_series["wheel_fl"] = ss["gt_wheel_fl"].round(3).tolist()
+
+    lat_col = "gt_lat" if has_vbox else "lat"
+    lon_col = "gt_lon" if has_vbox else "lon"
+    preview_cols = ["t", lat_col, lon_col, "speed_ms", "ax", "ay", "az",
+                    "wyaw", "yaw"]
+    if has_vbox:
+        preview_cols += ["gt_v_ms", "gt_heading_deg"]
+    preview = df.head(8)[[c for c in preview_cols if c in df.columns]].round(4)\
+        .to_dict(orient="records")
+
     return SessionOut(
         session_id=sid,
         n_samples=len(df),
         duration_s=float(df["t"].iloc[-1] - df["t"].iloc[0]),
-        lat0=float(df["lat"].iloc[0]),
-        lon0=float(df["lon"].iloc[0]),
+        lat0=float(df[lat_col].iloc[0]),
+        lon0=float(df[lon_col].iloc[0]),
         preview=preview,
         sensor_series=sensor_series,
+        has_vbox=has_vbox,
+        gt_source="vbox" if has_vbox else "smartphone_gps",
     )
 
 
@@ -124,20 +144,39 @@ async def root():
 
 @api.post("/dataset/load-preset", response_model=SessionOut)
 async def load_preset():
-    if not SAMPLE_CSV.exists():
-        raise HTTPException(500, "Preset dataset not bundled")
-    df = await asyncio.to_thread(load_smartphone_csv, str(SAMPLE_CSV))
-    return _build_session(df)
+    if not SAMPLE_S_CSV.exists():
+        raise HTTPException(500, "Preset smartphone dataset not bundled")
+    sdf = await asyncio.to_thread(load_smartphone_csv, str(SAMPLE_S_CSV))
+    if SAMPLE_V_CSV.exists():
+        vdf = await asyncio.to_thread(load_vbox_csv, str(SAMPLE_V_CSV))
+        try:
+            merged = await asyncio.to_thread(merge_smartphone_vbox, sdf, vdf)
+            return _build_session(merged)
+        except Exception as e:
+            log.warning(f"Could not align VBOX: {e}. Falling back to smartphone-only.")
+    return _build_session(sdf)
 
 
 @api.post("/dataset/upload", response_model=SessionOut)
-async def upload_csv(file: UploadFile = File(...)):
-    raw = await file.read()
+async def upload_csv(
+    smartphone: UploadFile = File(..., description="S-S1 style smartphone CSV"),
+    vbox: Optional[UploadFile] = File(None, description="V-S1 style VBOX CSV (optional)"),
+):
+    s_raw = await smartphone.read()
     try:
-        df = await asyncio.to_thread(load_smartphone_csv, raw)
+        sdf = await asyncio.to_thread(load_smartphone_csv, s_raw)
     except Exception as e:
-        raise HTTPException(400, f"Could not parse CSV: {e}")
-    return _build_session(df)
+        raise HTTPException(400, f"Could not parse smartphone CSV: {e}")
+
+    if vbox is not None:
+        v_raw = await vbox.read()
+        try:
+            vdf = await asyncio.to_thread(load_vbox_csv, v_raw)
+            sdf = await asyncio.to_thread(merge_smartphone_vbox, sdf, vdf)
+        except Exception as e:
+            raise HTTPException(400, f"Could not parse or align VBOX CSV: {e}")
+
+    return _build_session(sdf)
 
 
 @api.get("/dataset/{session_id}")

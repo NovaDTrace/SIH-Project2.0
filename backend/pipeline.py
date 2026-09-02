@@ -36,6 +36,7 @@ SMARTPHONE_COLS = {
     "speed": "GPS SPEED (Kmh)",
     "gps_heading": "GPS ORIENTATION (\u00b0)",
     "t_ms": "TIME SINCE START (ms)",
+    "date_str": "DATE (YYYY-MO-DD HH-MI-SS_SSS)",
     "ax": "ACCELEROMETER X (m/s\u00b2)",
     "ay": "ACCELEROMETER Y (m/s\u00b2)",
     "az": "ACCELEROMETER Z (m/s\u00b2)",
@@ -51,6 +52,26 @@ SMARTPHONE_COLS = {
     "yaw": "ORIENTATION (Yaw) (\u00b0)",
     "pitch": "ORIENTATION (Pitch) (\u00b0)",
     "roll": "ORIENTATION (Roll ) (\u00b0)",
+}
+
+
+VBOX_COLS = {
+    "sats": "No of GPS Satellites Available",
+    "t_sod": "Time Since Start of Day (seconds)",
+    "lat": "Latitude (degrees)",
+    "lon": "Longitude (degrees)",
+    "v_kmh": "Velocity (km/hr)",
+    "heading_deg": "Heading (degrees)",
+    "yaw_rate_dps": "Yaw Rate (deg/sec)",
+    "long_acc_g": "Indicated Longitudinal Acceleration (g)",
+    "lat_acc_g": "Indicated Lateral Acceleration (g)",
+    "veh_speed_kmh": "Indicated Vehicle Speed (km/hr)",
+    "wheel_fl": "Wheel Speed Front Left (rad/sec)",
+    "wheel_fr": "Wheel Speed Front Right (rad/sec)",
+    "wheel_rl": "Wheel Speed Rear Left (rad/sec)",
+    "wheel_rr": "Wheel Speed Rear Right (rad/sec)",
+    "brake": "Brake Position (0 or 1)",
+    "steering": "Steering Angle (degrees)",
 }
 
 
@@ -96,7 +117,9 @@ def load_smartphone_csv(raw_bytes: bytes | str, max_rows: int = 6_000) -> pd.Dat
         raise ValueError(f"Smartphone CSV missing required columns: {missing}")
 
     tidy = pd.DataFrame({k: pd.to_numeric(df[v], errors="coerce")
-                         for k, v in mapping.items()})
+                         for k, v in mapping.items() if k != "date_str"})
+    if "date_str" in mapping:
+        tidy["date_str"] = df[mapping["date_str"]].astype(str)
     tidy = tidy.dropna(subset=["lat", "lon", "speed", "t_ms"]).reset_index(drop=True)
 
     # Skip the initial "warm-up" portion where the vehicle is stationary — the
@@ -128,7 +151,116 @@ def load_smartphone_csv(raw_bytes: bytes | str, max_rows: int = 6_000) -> pd.Dat
     # Clamp to sane range (~150 km/h)
     speed_gt = np.clip(speed_gt, 0.0, 42.0)
     tidy["speed_ms"] = speed_gt
+
+    # Parse DATE column to seconds-since-start-of-day (UTC-agnostic) so we can
+    # later time-align to a VBOX log that only carries "seconds since 00:00".
+    if "date_str" in tidy.columns:
+        def _sod(s: str) -> float:
+            # format: "YYYY-MM-DD HH:MM:SS:mmm"
+            try:
+                tm = str(s).strip().split(" ", 1)[1]
+                parts = tm.split(":")
+                if len(parts) < 3:
+                    return float("nan")
+                h, m, sec = int(parts[0]), int(parts[1]), int(parts[2])
+                ms = int(parts[3]) if len(parts) > 3 else 0
+                return h * 3600 + m * 60 + sec + ms / 1000.0
+            except Exception:
+                return float("nan")
+        tidy["t_sod"] = tidy["date_str"].map(_sod)
+    else:
+        tidy["t_sod"] = np.nan
     return tidy
+
+
+# ---------------------------------------------------------------------------
+# VBOX (IO-VNBD V-file) loading
+# ---------------------------------------------------------------------------
+
+def load_vbox_csv(raw_bytes: bytes | str, max_rows: int = 20_000) -> pd.DataFrame:
+    """Read V-S1 style VBOX vehicle CSV. Time column is seconds-since-midnight."""
+    if isinstance(raw_bytes, str):
+        df = pd.read_csv(raw_bytes, encoding_errors="replace")
+    else:
+        df = pd.read_csv(io.BytesIO(raw_bytes), encoding_errors="replace")
+    df.columns = [c.strip() for c in df.columns]
+
+    mapping = {}
+    for key, target in VBOX_COLS.items():
+        col = _match_col(list(df.columns), target)
+        if col is not None:
+            mapping[key] = col
+    required = {"t_sod", "lat", "lon", "v_kmh", "heading_deg"}
+    missing = required - set(mapping)
+    if missing:
+        raise ValueError(f"VBOX CSV missing required columns: {missing}")
+
+    tidy = pd.DataFrame({k: pd.to_numeric(df[v], errors="coerce")
+                         for k, v in mapping.items()})
+    tidy = tidy.dropna(subset=["t_sod", "lat", "lon", "v_kmh"]).reset_index(drop=True)
+    if len(tidy) > max_rows:
+        tidy = tidy.iloc[:max_rows].reset_index(drop=True)
+    tidy["v_ms"] = tidy["v_kmh"] * (1000.0 / 3600.0)
+    return tidy
+
+
+def merge_smartphone_vbox(sdf: pd.DataFrame, vdf: pd.DataFrame) -> pd.DataFrame:
+    """Time-align VBOX telemetry onto smartphone samples (nearest neighbour).
+
+    The two logs may not use the same timezone (e.g. IO-VNBD ships the
+    smartphone log in local BST but the VBOX in UTC). We try 1-hour offsets
+    of ±0/±1/±2 and pick whichever produces the largest overlap.
+    """
+    if "t_sod" not in sdf.columns or sdf["t_sod"].isna().all():
+        raise ValueError("Smartphone CSV lacks DATE column — cannot align to VBOX.")
+    sdf = sdf.dropna(subset=["t_sod"]).reset_index(drop=True).copy()
+    vdf = vdf.sort_values("t_sod").reset_index(drop=True)
+
+    v_lo = float(vdf["t_sod"].iloc[0])
+    v_hi = float(vdf["t_sod"].iloc[-1])
+    s_lo0 = float(sdf["t_sod"].iloc[0])
+    s_hi0 = float(sdf["t_sod"].iloc[-1])
+
+    best_offset = 0
+    best_overlap = -1e9
+    for off in (0, -3600, 3600, -7200, 7200, -1800, 1800):
+        s_lo = s_lo0 + off
+        s_hi = s_hi0 + off
+        overlap = min(s_hi, v_hi) - max(s_lo, v_lo)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_offset = off
+
+    if best_overlap < 5.0:
+        raise ValueError(
+            f"Smartphone & VBOX logs do not overlap "
+            f"(best {best_overlap:.1f}s across ±2h offsets)."
+        )
+
+    sdf["t_sod"] = sdf["t_sod"] + best_offset
+    lo = max(float(sdf["t_sod"].iloc[0]), v_lo)
+    hi = min(float(sdf["t_sod"].iloc[-1]), v_hi)
+    sdf = sdf[(sdf["t_sod"] >= lo) & (sdf["t_sod"] <= hi)].reset_index(drop=True)
+
+    tv = vdf["t_sod"].to_numpy()
+    idx = np.searchsorted(tv, sdf["t_sod"].to_numpy())
+    idx = np.clip(idx, 1, len(tv) - 1)
+    left = idx - 1
+    take_left = np.abs(tv[left] - sdf["t_sod"].to_numpy()) <= \
+                np.abs(tv[idx] - sdf["t_sod"].to_numpy())
+    nn = np.where(take_left, left, idx)
+
+    for k in ["lat", "lon", "v_ms", "heading_deg", "yaw_rate_dps",
+              "long_acc_g", "lat_acc_g",
+              "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr",
+              "brake", "steering"]:
+        if k in vdf.columns:
+            sdf[f"gt_{k}"] = vdf[k].to_numpy()[nn]
+
+    sdf["t"] = sdf["t_sod"] - sdf["t_sod"].iloc[0]
+    if "gt_v_ms" in sdf.columns:
+        sdf["speed_ms"] = sdf["gt_v_ms"]
+    return sdf
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +412,20 @@ def run_dead_reckoning(df: pd.DataFrame,
                        blackout_end_s: float) -> dict:
     """
     Runs three trajectories:
-      * GT       : ground truth from GPS
-      * INS raw  : integrates GPS speed with orientation yaw (no filter)
-      * Fused    : EKF with GPS updates outside blackout + ML velocity always,
-                   with non-holonomic constraint enforced in body frame.
+      * GT       : ground truth (VBOX if available, else smartphone GPS)
+      * INS raw  : naive dead-reckoning (frozen velocity + phone yaw + offset)
+      * Fused    : EKF fusion with ML velocity + non-holonomic constraint
     """
     t = df["t"].to_numpy()
-    lat = df["lat"].to_numpy()
-    lon = df["lon"].to_numpy()
+    # Prefer VBOX GT position when available (much higher precision than phone).
+    if "gt_lat" in df.columns and "gt_lon" in df.columns:
+        lat = df["gt_lat"].to_numpy()
+        lon = df["gt_lon"].to_numpy()
+        gt_source = "vbox"
+    else:
+        lat = df["lat"].to_numpy()
+        lon = df["lon"].to_numpy()
+        gt_source = "smartphone_gps"
     v_gps = df["speed_ms"].to_numpy()
 
     # --- Heading source ---

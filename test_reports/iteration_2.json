@@ -1,0 +1,60 @@
+{
+  "summary": "Full re-test of the VBOX-ground-truth refactor. Rewrote /app/backend/tests/backend_test.py for the new multipart upload contract ('smartphone' + optional 'vbox') and VBOX assertions: 24/24 pytest cases pass. Verified preset returns has_vbox=true/gt_source='vbox' (6000 samples, 600s, preview carries gt_lat/gt_lon/gt_v_ms/gt_heading_deg, sensor_series.gt_v present, max speed 21 m/s - no longer saturated). Training on VBOX GT: MAE=2.283 m/s, RMSE=3.242, R2=0.475 (targets MAE<5, R2>0.2 met). Simulate 300-360s: INS drift 47.90%, Fused drift 9.03%, meets_isro_target=true. Upload variants verified: smartphone-only -> has_vbox=false/gt_source='smartphone_gps'; smartphone+vbox -> has_vbox=true; valid smartphone + garbage VBOX -> 400 with 'VBOX' in detail; garbage smartphone -> 400; legacy 'file' field -> 422. Frontend E2E on the public URL: both labelled file slots ('1. VBOX (V-*.csv) / Ground truth', '2. Smartphone (S-*.csv) / IMU + phone GPS'), both slots open native file choosers, real dual-file upload of the bundled 9.4MB+10.7MB CSVs through the UI succeeds and shows 'GT source: VBOX (aligned)' in orange (rgb(253,186,116)), MapPanel header 'VBOX GT vs INS-only vs Fused' with orange 'VBOX GT' legend, train -> sim(300/360) -> green 'ISRO TARGET MET (<10% drift)' badge with Fused drift 9.03% / final 66.1m / RMSE 137.9m, and AI report generates 1196 chars of real Claude content (no '[AI summary offline]'). No 500s, no console errors, no blocked clicks.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "MapPanel (left column, after simulate)",
+        "issues": [
+          "Leaflet canvas does not re-expand when the right column grows after train/sim, leaving ~130px of empty dark space inside the map card below the tiles (tiles stop ~y=600 while the card border ends ~y=750). Call map.invalidateSize() in a useEffect keyed on `sim` (or a ResizeObserver) so the tile layer fills the stretched card."
+        ]
+      },
+      {
+        "screen": "AI Analysis panel",
+        "issues": [
+          "LLM output is raw markdown rendered verbatim in a monospace block ('## Dead-Reckoning...', '**Verdict:**'). Cosmetic only - either render with a markdown component or instruct the model to return plain text."
+        ]
+      },
+      {
+        "screen": "Console (all recharts panels)",
+        "issues": [
+          "Repeated non-fatal warning: 'The width(-1) and height(-1) of chart should be greater than 0' from ResponsiveContainer on first paint. Add minWidth={0}/minHeight to silence it."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional polish only: invalidateSize() the Leaflet map so it fills the map card after the right column grows",
+    "Optional: render the AI markdown or request plain-text output",
+    "Optional: silence the recharts ResponsiveContainer width/height warning"
+  ],
+  "critical_code_review_comments": [
+    "pipeline.run_dead_reckoning derives the phone->vehicle heading offset from df['lat']/df['lon'] (phone GPS) while gt_x/gt_y come from gt_lat/gt_lon (VBOX). The two position sources are consistent enough here, but the heading-alignment ENU frame is built around the phone origin whereas the trajectory frame uses the VBOX origin - worth unifying to avoid a subtle constant bias when the two logs' first fixes differ.",
+    "merge_smartphone_vbox mutates the caller's DataFrame ('sdf[\"t_sod\"] = sdf[\"t_sod\"] + best_offset' after .copy() is fine, but the earlier dropna/copy ordering means the copy only happens once - keep the .copy() first to stay safe if callers reuse sdf).",
+    "SESSIONS is an unbounded in-memory dict holding a full 6000-row DataFrame + RandomForest per session and is never evicted; each preset/upload leaks memory. Add a TTL/LRU cap (acceptable for the MVP, but note it).",
+    "load_preset silently falls back to smartphone-only on any VBOX alignment exception (only a log.warning). The API response does surface gt_source, so the UI can tell - but consider returning a warning field so the user knows why GT degraded.",
+    "server.py /api/dataset/upload has no file-size guard; a large CSV is read fully into memory (await smartphone.read()) before parsing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/frontend/src/components/AiSummaryPanel.jsx"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24)",
+    "frontend": "100% (all 9 requested flows verified)"
+  },
+  "seed_data_creation": "None. Used bundled /app/backend/sample_data/S-S1.csv and V-S1.csv plus in-memory garbage CSVs for negative cases. Sessions are in-memory only, nothing persisted.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Upload contract is multipart 'smartphone' (required) + 'vbox' (optional); the old single 'file' field now returns 422 and there is a test asserting that. backend_test.py is pytest-based, session-scoped preset/trained fixtures, runs under the pre-configured -n 2 --dist loadscope. Note prints (MAE/R2, drift%) are only visible with `-n 0 -s`. I added data-testid='ai-summary-output' to AiSummaryPanel.jsx because the existing 'ai-summary-card' testid wraps the placeholder terminal text and produced a false-positive pass - always assert on 'ai-summary-output' and compare against its pre-click text. Playwright dual-file upload works by set_input_files on the two hidden inputs (nth(0)=VBOX, nth(1)=smartphone); the visible slots are <button> elements that proxy to them.",
+  "rca_of_the_issue": "No defects found. Two testing-side corrections were made: (1) the previous backend_test.py used the removed single 'file' upload field, rewritten for the new smartphone/vbox multipart contract; (2) the AI-report assertion was passing on the placeholder terminal text inside 'ai-summary-card', fixed by adding a dedicated 'ai-summary-output' testid and diffing content before/after the click - the LLM call itself is genuinely working (1196 chars of Claude Sonnet 4.5 output)."
+}

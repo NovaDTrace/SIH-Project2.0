@@ -29,6 +29,7 @@ export default function MapPanel({ session, sim }) {
   const gt = traj?.ground_truth || [];
   const ins = traj?.ins_raw || [];
   const fused = traj?.fused || [];
+  const gtLabel = session?.has_vbox ? "VBOX GT" : "Phone-GPS GT";
 
   return (
     <div className="card-tactical p-3 h-full flex flex-col">
@@ -36,11 +37,11 @@ export default function MapPanel({ session, sim }) {
         <div>
           <div className="text-xs font-mono uppercase tracking-[0.2em] text-cyan-400">Trajectory Map</div>
           <h3 className="text-lg font-heading font-semibold text-slate-100">
-            Ground Truth vs INS-only vs Fused
+            {gtLabel} vs INS-only vs Fused
           </h3>
         </div>
         <div className="flex flex-wrap gap-3 text-[11px] font-mono">
-          <Legend color="#f97316" label="Ground truth" />
+          <Legend color="#f97316" label={gtLabel} />
           <Legend color="#a855f7" dashed label="INS raw" />
           <Legend color="#06b6d4" label="Fused (EKF+ML)" />
         </div>
