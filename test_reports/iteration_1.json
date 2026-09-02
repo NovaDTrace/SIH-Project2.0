@@ -1,0 +1,44 @@
+{
+  "summary": "First full E2E test of the ISRO dead-reckoning app. Backend: 16 pytest cases across health, dataset load-preset/upload/invalid-CSV/session lookup, RandomForest training (+404/422 validation), blackout simulation (400 without training, 404 unknown session, 400 inverted window, full metric/trajectory/velocity schema) and the Claude Sonnet 4.5 AI summary — all 16 passed. Fusion is clearly better than INS-only for a 120-150s blackout: INS drift 288.83% vs fused 16.14% (~18x better), fused RMSE 28.8 m vs INS much higher. Frontend: full flow works via public URL — preset load (6,000 samples / 600 s / origin 52.40214,-1.50634 + sensor chart), training (MAE 13.247, RMSE 17.024, R2 -0.099, feature-importance + GPS-vs-ML charts), blackout inputs/slider, simulation metrics grid + ISRO NOT-MET badge, Leaflet map with all 3 polylines (#f97316 GT, #a855f7 INS, #06b6d4 fused) rendered inside bounds with 8 OSM tiles loaded, and a real LLM mission report in the terminal panel. No console/page errors, no error elements.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/pipeline/simulate", "issue": "blackout_distance_m = sum(v_gps[blackout]) * mean(dt) uses the derived GPS speed signal which spikes repeatedly to the 42 m/s clamp (see velocity chart). Inflated segment distance deflates both drift percentages, so the honest drift figure may be worse than reported."},
+      {"endpoint": "sessions (all)", "issue": "SESSIONS is an in-memory dict — every backend reload/restart invalidates existing session_ids and the UI then fails with 404 until the dataset is re-loaded. No persistence in Mongo despite the client being initialised."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MetricsPanel velocity chart", "issue": "Red blackout ReferenceArea never renders (document.querySelectorAll('.recharts-reference-area').length === 0). XAxis dataKey='t' defaults to type='category', so x1=120/x2=150 do not match any category value. Add type='number' + domain to the XAxis.", "selector": ".recharts-reference-area", "priority": "MEDIUM"},
+      {"component": "SimulationPanel", "issue": "setRange() is called inside useMemo (side effect in a memo) instead of useEffect — works today but is a React anti-pattern and can break with concurrent rendering.", "selector": "[data-testid=sim-run-button]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Drift & Performance metric cards", "issues": ["At lg:grid-cols-6 the values overflow their card borders (e.g. '288.83%' and '428.3 m' bleed past the right edge of the INS cards)", "Labels wrap to 3 lines ('FUSED / DRIFT / %') because the icon+label row is too narrow"]},
+      {"screen": "Dataset panel copy", "issues": ["Text says 'bundled S-S1.csv IO-VNBD sample (Coventry drive, ~51k rows)' but the pipeline truncates to max_rows=6000 and the stat card shows 6,000 samples / 600 s — misleading copy"]},
+      {"screen": "Console (all charts)", "issues": ["Recharts warning repeated: 'The width(-1) and height(-1) of chart should be greater than 0' on first paint of ResponsiveContainer children — add minWidth/minHeight or a fixed height wrapper"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix blackout ReferenceArea in MetricsPanel: set XAxis type='number' (currently the red blackout region is invisible)",
+    "Fix metric card value overflow in MetricsPanel at 6-column layout",
+    "Correct the '~51k rows' copy in DatasetPanel (only 6,000 rows / 600 s are used)",
+    "Consider a physically-plausible GPS speed derivation (median/Savitzky-Golay instead of clamp at 42 m/s) so blackout_distance_m and drift % are not optimistically biased",
+    "Move setRange out of useMemo into useEffect in SimulationPanel",
+    "Optional: persist sessions (Mongo) so a backend restart does not 404 an active dashboard session"
+  ],
+  "critical_code_review_comments": [
+    "pipeline.load_smartphone_csv clips derived speed at 42 m/s; the derived step-speed oscillates 0->42 m/s across the whole trace, which is the real cause of MAE 13.2 m/s and R2 -0.099 — the target signal, not the model, is the bottleneck.",
+    "run_dead_reckoning computes blackout_distance_m from that same noisy speed, so both drift percentages inherit the bias; consider path length from GPS positions (sum of ENU steps) instead.",
+    "server.py keeps whole DataFrames in a module-level dict with no eviction — memory grows per upload (each ~6k rows is small, but uploads are unbounded in count).",
+    "MapPanel uses a fixed zoom=13 centred on lat0 with no fitBounds; trajectories happen to fit for this dataset but a longer/other drive can render partly off-view."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "~90% (all flows pass; blackout band missing + card overflow)"},
+  "seed_data_creation": "None persisted; tests use the bundled /app/backend/sample_data/S-S1.csv preset and an in-memory invalid CSV.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite lives at /app/backend/tests/backend_test.py (run: cd /app/backend && python -m pytest tests/backend_test.py -v). It runs under xdist LoadScope so class-scoped fixtures re-load the preset per worker (~20s total). E2E frontend flow verified: preset-ss1-load-button -> ml-train-model-button -> sim inputs 120/150 -> sim-run-button -> ai-summary-run-button (LLM ~10s). Negative R2 and 'ISRO TARGET NOT MET' are expected on this dataset, not bugs.",
+  "rca_of_the_issue": "Missing red blackout band: recharts ReferenceArea x1/x2 require a numeric axis; MetricsPanel's XAxis dataKey='t' is a category axis and the numeric blackout bounds (120/150) never match a category tick, so recharts renders nothing. Metric card overflow: fixed text-xl stat values inside 6 narrow grid columns with no truncation/responsive font."
+}

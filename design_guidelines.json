@@ -1,0 +1,145 @@
+{
+  "project_title": "ISRO AI/ML Intelligent Dead Reckoning Navigation System (IO-VNBD Dataset)",
+  "app_type": "dashboard",
+  "archetype": "THE PERFORMANCE PRO & TACTICAL AEROSPACE MINIMALISM",
+  "theme": "dark",
+  "design_philosophy": {
+    "emotional_archetype": "Tactical Aerospace Precision & Mission-Critical Reliability (ISRO Focus)",
+    "core_principles": [
+      "Fusion over Imitation: Mix aerospace telemetry HUD styling with Swiss data density and clean modern react components",
+      "Content is King: Treat IMU sensor telemetry (accel, gyro, mag) and spatial dead reckoning paths with cinematic mission control seriousness",
+      "Tactical Negative Space & Contrast: Use 1px sharp borders, subtle slate glows, and high-visibility status indicators instead of soft commercial gradients",
+      "Dense Data Scanability: Mode B Bento Grid with 10 Hz simulation capabilities, live drift indicators, trajectory canvas, and real-time model metrics"
+    ]
+  },
+  "typography": {
+    "heading_font": "Exo 2, Chivo, sans-serif",
+    "body_font": "IBM Plex Sans, DM Sans, sans-serif",
+    "mono_font": "JetBrains Mono, Source Code Pro, monospace",
+    "forbidden_heading_fonts": ["Inter", "Space Grotesk", "Roboto", "Open Sans"],
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight font-heading text-slate-100",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-100",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-normal text-slate-200",
+      "h4": "text-lg sm:text-xl font-medium text-slate-300",
+      "body": "text-base leading-relaxed text-slate-300 font-body",
+      "caption_overline": "text-xs font-mono uppercase tracking-[0.2em] text-cyan-400 font-semibold"
+    }
+  },
+  "color_palette": {
+    "background": {
+      "primary": "#070A12",
+      "surface": "#0F172A",
+      "card": "#111827",
+      "card_hover": "#1E293B",
+      "overlay": "rgba(15, 23, 42, 0.85)"
+    },
+    "forbidden_colors": ["#7351B7", "#1B93A4"],
+    "brand_accents": {
+      "isro_orange": "#F97316",
+      "navic_cyan": "#06B6D4",
+      "emerald_status": "#10B981",
+      "blackout_alert": "#EF4444",
+      "ins_raw_purple": "#A855F7",
+      "amber_warning": "#F59E0B"
+    },
+    "borders": {
+      "subtle": "#1E293B",
+      "default": "#334155",
+      "active": "#06B6D4"
+    },
+    "text": {
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "muted": "#64748B",
+      "accent": "#38BDF8"
+    }
+  },
+  "spacing_and_layout": {
+    "grid_system": "High Density Grid (Mode B Dashboard)",
+    "container_padding": "p-4 md:p-6 lg:p-8",
+    "gap_scale": "gap-4 md:gap-6",
+    "card_padding": "p-5 md:p-6",
+    "rules": [
+      "Containers with borders must include p-5 or p-6 padding to prevent text collision",
+      "Grid children must be direct children; if using motion.div, it must host grid span classes",
+      "Align interactive controls with left padding optical alignment",
+      "Leaflet map container must have full height inside its grid cell (min-h-[480px])"
+    ]
+  },
+  "image_urls": {
+    "hero_satellite": "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxzYXRlbGxpdGUlMjBlYXJ0aCUyMHNwYWNlJTIwdGVjaHxlbnwwfHx8fDE3ODc4NDI4NTN8MA&ixlib=rb-4.1.0&q=85",
+    "orbit_constellation": "https://images.unsplash.com/photo-1708738793054-32b71e3fc822?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHszfHxzYXRlbGxpdGUlMjBlYXJ0aCUyMHNwYWNlJTIwdGVjaHxlbnwwfHx8fDE3ODc4NDI4NTN8MA&ixlib=rb-4.1.0&q=85",
+    "navigation_hud": "https://images.unsplash.com/photo-1753040050114-ae924195a578?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwxfHx0YWN0aWNhbCUyMHJhZGFyJTIwbWFwJTIwZ3JpZCUyMG5hdmlnYXRpb24lMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzg4MzcxNzQ2fDA&ixlib=rb-4.1.0&q=85",
+    "nautical_radar_chart": "https://images.unsplash.com/photo-1757882585667-dffbeaaabb81?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwzfHx0YWN0aWNhbCUyMHJhZGFyJTIwbWFwJTIwZ3JpZCUyMG5hdmlnYXRpb24lMjBpbnRlcmZhY2V8ZW58MHx8fHwxNzg4MzcxNzQ2fDA&ixlib=rb-4.1.0&q=85",
+    "telemetry_dashboard_bg": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxkYXJrJTIwdGVsZW1ldHJ5JTIwZGF0YSUyMGRhc2hib2FyZHxlbnwwfHx8fDE3ODE5MTAwNTF8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "component_guidelines": {
+    "file_extension_notice": "Project uses JavaScript (.js / .jsx) components in /src/components/ui/",
+    "header_nav": {
+      "style": "Glassmorphism with backdrop-blur-xl bg-slate-950/80 border-b border-slate-800 z-50 sticky top-0",
+      "elements": [
+        "ISRO NavIC logo badge with glowing green pulse indicator",
+        "Navigation tabs: [Overview / CSV Data / ML Model / DR Simulation / Trajectory Map / AI Report]",
+        "Dataset selector (IO-VNBD S-S1 + V-S1 preset or custom upload)",
+        "Quick status telemetry indicator (GPS Status: Normal / Blackout)"
+      ]
+    },
+    "hero_banner": {
+      "style": "Tactical telemetry header with background grid overlay, mission statement, ISRO problem context, and quick-action run trigger",
+      "tagline": "AI/ML Intelligent Dead Reckoning System for Seamless Navigation in GPS-Denied Environments"
+    },
+    "csv_uploader_panel": {
+      "style": "Dropzone with dual file handles (Smartphone IMU S-S1.csv + Vehicle GT V-S1.csv), instant parsing, column mapping check, sample pre-loader button"
+    },
+    "sensor_timeseries_chart": {
+      "style": "Multi-axis sync Recharts/Canvas with Accel (ax, ay, az), Gyro (wx, wy, wz), Mag, and GPS velocity overlays with windowing sliders"
+    },
+    "ml_training_panel": {
+      "style": "RandomForest / XGBoost regressor setup for velocity estimation from IMU sliding windows. Live epoch/tree training animation, feature importance bar chart, validation MAE & RMSE metrics"
+    },
+    "dead_reckoning_sim_control": {
+      "style": "Interactive slider & numeric inputs for GPS blackout window selection (e.g. t=120s to t=240s), filter selector (EKF vs UKF vs ML-fused), real-time 10 Hz replay toggle"
+    },
+    "leaflet_trajectory_map": {
+      "style": "Custom Dark Tile Layer OpenStreetMap / CartoDB Dark Matter. Polyline overlays for Ground Truth (Orange #F97316), INS Raw DR (Purple #A855F7), Fused ML+Kalman DR (Cyan #06B6D4), with translucent red Polygon for Blackout zone and live animated marker icon"
+    },
+    "drift_metrics_dashboard": {
+      "style": "Grid of high-impact stat cards: Final Position Drift Error (m & % of trajectory distance), Horizontal RMSE (m), Peak Error (m), GPS-Denied Duration (s), Update Frequency (10 Hz)"
+    },
+    "ai_summary_panel": {
+      "style": "Terminal-style card with markdown stream explanation of navigation performance, failure modes during blackout, filter convergence analysis, and ISRO mission readiness rating"
+    }
+  },
+  "motion_and_interactions": {
+    "hover_effects": "border-cyan-500/50 transition-colors duration-200 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)]",
+    "active_states": "scale-[0.99] transition-transform duration-100",
+    "reduced_motion": "Respect prefers-reduced-motion CSS media query across all charts and map animations"
+  },
+  "testing_requirements": {
+    "mandatory_data_testid": true,
+    "convention": "kebab-case role-based attributes",
+    "examples": [
+      "data-testid=\"nav-upload-tab\"",
+      "data-testid=\"csv-imu-dropzone\"",
+      "data-testid=\"preset-ss1-load-button\"",
+      "data-testid=\"ml-train-model-button\"",
+      "data-testid=\"sim-blackout-start-input\"",
+      "data-testid=\"sim-blackout-end-input\"",
+      "data-testid=\"sim-run-button\"",
+      "data-testid=\"leaflet-map-container\"",
+      "data-testid=\"metric-drift-percentage\"",
+      "data-testid=\"metric-rmse-value\"",
+      "data-testid=\"ai-summary-card\""
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Load dataset presets (IO-VNBD S-S1 smartphone IMU & V-S1 vehicle ground truth) seamlessly if user clicks 'Load IO-VNBD Demo Dataset'.",
+    "Build a robust client-side or FastAPI backend pipeline for sliding window feature extraction (accel magnitude, gyro norm, pitch/roll tilt, variance) -> train scikit-learn RandomForest model for speed prediction -> integrate INS dead reckoning equations (v * dt, heading update) -> EKF/UKF filter fusion.",
+    "Implement real-time Leaflet trajectory plot using react-leaflet or leaflet with custom dark tiles (e.g., CartoDB Dark Matter or OSM with dark filter).",
+    "Highlight the simulated GPS blackout time window with a distinct red shading on both the time-series charts and map trajectory.",
+    "Calculate and display exact drift metrics: Drift % = (Final Position Error / Total Distance Traveled during blackout) * 100.",
+    "Include simulated live 10 Hz playback animation along the trajectory on the map with step/pause controls.",
+    "Ensure ALL interactive elements and key metric text boxes contain data-testid attributes for testing."
+  ]
+}
